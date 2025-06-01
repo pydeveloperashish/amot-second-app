@@ -63,7 +63,9 @@
         "info": "Info",
         "save": "Save",
         "copy": "Copy",
-        "copied": "Copied!"
+        "copied": "Copied!",
+        "thumbsUp": "Thumbs up",
+        "thumbsDown": "Thumbs down"
     },
 
     "headerTexts":{

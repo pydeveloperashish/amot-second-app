@@ -7,11 +7,13 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 
 import styles from "./Answer.module.css";
-import { ChatAppResponse, getCitationFilePath, SpeechConfig } from "../../api";
+import { ChatAppResponse, getCitationFilePath, SpeechConfig, FeedbackType, sendFeedbackApi } from "../../api";
 import { parseAnswerToHtml } from "./AnswerParser";
 import { AnswerIcon } from "./AnswerIcon";
 import { SpeechOutputBrowser } from "./SpeechOutputBrowser";
 import { SpeechOutputAzure } from "./SpeechOutputAzure";
+import { useLogin, getToken } from "../../authConfig";
+import { useMsal } from "@azure/msal-react";
 
 interface Props {
     answer: ChatAppResponse;
@@ -47,6 +49,10 @@ export const Answer = ({
     const { t } = useTranslation();
     const sanitizedAnswerHtml = DOMPurify.sanitize(parsedAnswer.answerHtml);
     const [copied, setCopied] = useState(false);
+    const [feedback, setFeedback] = useState<FeedbackType | null>(null);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
+    
+    const client = useLogin ? useMsal().instance : undefined;
 
     const handleCopy = () => {
         // Single replace to remove all HTML tags to remove the citations
@@ -59,6 +65,25 @@ export const Answer = ({
                 setTimeout(() => setCopied(false), 2000);
             })
             .catch(err => console.error("Failed to copy text: ", err));
+    };
+
+    const handleFeedback = async (feedbackType: FeedbackType) => {
+        if (feedbackLoading || !answer.session_state) return;
+        
+        setFeedbackLoading(true);
+        try {
+            const token = client ? await getToken(client) : undefined;
+            await sendFeedbackApi({
+                session_id: answer.session_state,
+                message_index: index,
+                feedback_type: feedbackType
+            }, token);
+            setFeedback(feedbackType);
+        } catch (error) {
+            console.error("Failed to send feedback:", error);
+        } finally {
+            setFeedbackLoading(false);
+        }
     };
 
     return (
@@ -93,17 +118,48 @@ export const Answer = ({
                         {showSpeechOutputAzure && (
                             <SpeechOutputAzure answer={sanitizedAnswerHtml} index={index} speechConfig={speechConfig} isStreaming={isStreaming} />
                         )}
-                        {showSpeechOutputBrowser && <SpeechOutputBrowser answer={sanitizedAnswerHtml} />}
+                        {showSpeechOutputBrowser && (
+                            <SpeechOutputBrowser answer={sanitizedAnswerHtml} />
+                        )}
+                        
+                        {/* Feedback buttons */}
+                        <IconButton
+                            className={`${styles.feedbackButton} ${feedback === "positive" ? styles.feedbackButtonActive : ""}`}
+                            style={{ 
+                                color: feedback === "positive" ? "#0078d4" : "black",
+                                opacity: feedbackLoading ? 0.5 : 1
+                            }}
+                            iconProps={{ iconName: "Like" }}
+                            title={t("tooltips.thumbsUp")}
+                            ariaLabel={t("tooltips.thumbsUp")}
+                            onClick={() => handleFeedback("positive")}
+                            disabled={feedbackLoading || isStreaming}
+                        />
+                        <IconButton
+                            className={`${styles.feedbackButton} ${feedback === "negative" ? styles.feedbackButtonActive : ""}`}
+                            style={{ 
+                                color: feedback === "negative" ? "#d13438" : "black",
+                                opacity: feedbackLoading ? 0.5 : 1
+                            }}
+                            iconProps={{ iconName: "Dislike" }}
+                            title={t("tooltips.thumbsDown")}
+                            ariaLabel={t("tooltips.thumbsDown")}
+                            onClick={() => handleFeedback("negative")}
+                            disabled={feedbackLoading || isStreaming}
+                        />
                     </div>
                 </Stack>
             </Stack.Item>
-
-            <Stack.Item grow>
+            <Stack.Item>
                 <div className={styles.answerText}>
-                    <ReactMarkdown children={sanitizedAnswerHtml} rehypePlugins={[rehypeRaw]} remarkPlugins={[remarkGfm]} />
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        children={sanitizedAnswerHtml}
+                        className={styles.answerText}
+                    />
                 </div>
             </Stack.Item>
-
             {!!parsedAnswer.citations.length && (
                 <Stack.Item>
                     <Stack horizontal wrap tokens={{ childrenGap: 5 }}>

@@ -141,3 +141,15 @@ sup {
     content: "";
     animation: loading 1s infinite;
 }
+
+.feedbackButton {
+    transition: color 0.2s ease-in-out;
+}
+
+.feedbackButton:hover {
+    opacity: 0.7 !important;
+}
+
+.feedbackButtonActive {
+    font-weight: bold;
+}

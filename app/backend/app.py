@@ -17,6 +17,7 @@ from azure.cognitiveservices.speech import (
     SpeechSynthesizer,
 )
 from azure.core.exceptions import ResourceNotFoundError
+from azure.cosmos.aio import ContainerProxy
 from azure.identity.aio import (
     AzureDeveloperCliCredential,
     ManagedIdentityCredential,
@@ -68,6 +69,7 @@ from config import (
     CONFIG_CHAT_HISTORY_BROWSER_ENABLED,
     CONFIG_CHAT_HISTORY_COSMOS_ENABLED,
     CONFIG_CHAT_VISION_APPROACH,
+    CONFIG_COSMOS_HISTORY_CONTAINER,
     CONFIG_CREDENTIAL,
     CONFIG_DEFAULT_REASONING_EFFORT,
     CONFIG_GPT4V_DEPLOYED,
@@ -284,6 +286,59 @@ async def chat_stream(auth_claims: dict[str, Any]):
         return response
     except Exception as error:
         return error_response(error, "/chat")
+
+
+@bp.route("/feedback", methods=["POST"])
+@authenticated
+async def feedback(auth_claims: dict[str, Any]):
+    if not current_app.config[CONFIG_CHAT_HISTORY_COSMOS_ENABLED]:
+        return jsonify({"error": "Chat history not enabled"}), 400
+    
+    if not request.is_json:
+        return jsonify({"error": "request must be json"}), 415
+    
+    container: ContainerProxy = current_app.config[CONFIG_COSMOS_HISTORY_CONTAINER]
+    if not container:
+        return jsonify({"error": "Chat history not enabled"}), 400
+
+    entra_oid = auth_claims.get("oid")
+    if not entra_oid:
+        return jsonify({"error": "User OID not found"}), 401
+
+    try:
+        request_json = await request.get_json()
+        session_id = request_json.get("session_id")
+        message_index = request_json.get("message_index")
+        feedback_type = request_json.get("feedback_type")
+        
+        if not session_id or message_index is None or not feedback_type:
+            return jsonify({"error": "Missing required fields: session_id, message_index, feedback_type"}), 400
+        
+        if feedback_type not in ["positive", "negative"]:
+            return jsonify({"error": "Invalid feedback_type. Must be 'positive' or 'negative'"}), 400
+
+        # Find the existing message_pair item to update
+        message_pair_id = f"{session_id}-{message_index}"
+        
+        # Get the existing message pair
+        try:
+            existing_item = await container.read_item(
+                item=message_pair_id,
+                partition_key=[entra_oid, session_id]
+            )
+        except ResourceNotFoundError:
+            return jsonify({"error": "Message pair not found"}), 404
+        
+        # Add feedback to the existing item
+        existing_item["feedback"] = feedback_type
+        
+        # Update the item in Cosmos DB
+        await container.upsert_item(body=existing_item)
+        
+        return jsonify({"message": "Feedback recorded successfully"}), 200
+        
+    except Exception as error:
+        return error_response(error, "/feedback")
 
 
 # Send MSAL.js settings to the client UI

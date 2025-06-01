@@ -131,3 +131,11 @@ export type HistoryApiResponse = {
     entra_oid: string;
     answers: any;
 };
+
+export type FeedbackType = "positive" | "negative";
+
+export type FeedbackRequest = {
+    session_id: string;
+    message_index: number;
+    feedback_type: FeedbackType;
+};
