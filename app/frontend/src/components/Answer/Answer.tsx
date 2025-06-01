@@ -73,12 +73,24 @@ export const Answer = ({
         setFeedbackLoading(true);
         try {
             const token = client ? await getToken(client) : undefined;
-            await sendFeedbackApi({
-                session_id: answer.session_state,
-                message_index: index,
-                feedback_type: feedbackType
-            }, token);
-            setFeedback(feedbackType);
+            
+            // If user clicks the same feedback again, remove it
+            if (feedback === feedbackType) {
+                await sendFeedbackApi({
+                    session_id: answer.session_state,
+                    message_index: index,
+                    feedback_type: "remove"
+                }, token);
+                setFeedback(null);
+            } else {
+                // Otherwise, set the new feedback
+                await sendFeedbackApi({
+                    session_id: answer.session_state,
+                    message_index: index,
+                    feedback_type: feedbackType
+                }, token);
+                setFeedback(feedbackType);
+            }
         } catch (error) {
             console.error("Failed to send feedback:", error);
         } finally {

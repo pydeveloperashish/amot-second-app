@@ -314,8 +314,8 @@ async def feedback(auth_claims: dict[str, Any]):
         if not session_id or message_index is None or not feedback_type:
             return jsonify({"error": "Missing required fields: session_id, message_index, feedback_type"}), 400
         
-        if feedback_type not in ["positive", "negative"]:
-            return jsonify({"error": "Invalid feedback_type. Must be 'positive' or 'negative'"}), 400
+        if feedback_type not in ["positive", "negative", "remove"]:
+            return jsonify({"error": "Invalid feedback_type. Must be 'positive', 'negative', or 'remove'"}), 400
 
         # Find the existing message_pair item to update
         message_pair_id = f"{session_id}-{message_index}"
@@ -329,8 +329,13 @@ async def feedback(auth_claims: dict[str, Any]):
         except ResourceNotFoundError:
             return jsonify({"error": "Message pair not found"}), 404
         
-        # Add feedback to the existing item
-        existing_item["feedback"] = feedback_type
+        # Handle feedback removal or addition
+        if feedback_type == "remove":
+            # Remove feedback field if it exists
+            existing_item.pop("feedback", None)
+        else:
+            # Add feedback to the existing item
+            existing_item["feedback"] = feedback_type
         
         # Update the item in Cosmos DB
         await container.upsert_item(body=existing_item)

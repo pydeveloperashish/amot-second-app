@@ -132,7 +132,7 @@ export type HistoryApiResponse = {
     answers: any;
 };
 
-export type FeedbackType = "positive" | "negative";
+export type FeedbackType = "positive" | "negative" | "remove";
 
 export type FeedbackRequest = {
     session_id: string;
