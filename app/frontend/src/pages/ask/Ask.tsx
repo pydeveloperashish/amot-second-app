@@ -1,16 +1,15 @@
 import { useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
-import { Panel, DefaultButton, Spinner } from "@fluentui/react";
+import { Panel, DefaultButton, Spinner, TextField, SpinButton } from "@fluentui/react";
 
 import styles from "./Ask.module.css";
 
 import { askApi, configApi, ChatAppResponse, ChatAppRequest, RetrievalMode, VectorFields, GPT4VInput, SpeechConfig } from "../../api";
 import { Answer, AnswerError } from "../../components/Answer";
 import { QuestionInput } from "../../components/QuestionInput";
-import { ExampleList } from "../../components/Example";
 import { AnalysisPanel, AnalysisPanelTabs } from "../../components/AnalysisPanel";
-import { SettingsButton } from "../../components/SettingsButton/SettingsButton";
+import { SettingsButton } from "../../components/SettingsButton";
 import { useLogin, getToken, requireAccessControl } from "../../authConfig";
 import { UploadFile } from "../../components/UploadFile";
 import { Settings } from "../../components/Settings/Settings";
@@ -304,7 +303,6 @@ export function Component(): JSX.Element {
                 {!lastQuestionRef.current && (
                     <div className={styles.askTopSection}>
                         {showLanguagePicker && <LanguagePicker onLanguageChange={newLang => i18n.changeLanguage(newLang)} />}
-                        <ExampleList onExampleClicked={onExampleClicked} useGPT4V={useGPT4V} />
                     </div>
                 )}
                 {!isLoading && answer && !error && (
