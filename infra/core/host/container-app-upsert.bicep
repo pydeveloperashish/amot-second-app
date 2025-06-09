@@ -15,6 +15,7 @@ param containerMaxReplicas int = 10
 param containerMemory string = '1.0Gi'
 
 @description('The minimum number of replicas to run. Must be at least 1 for non-consumption workloads.')
+@minValue(0)
 param containerMinReplicas int = 1
 
 @description('The name of the container')
