@@ -309,7 +309,7 @@ param containerRegistryName string = deploymentTarget == 'containerapps'
 // For more information please see https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS
 var msftAllowedOrigins = [ 'https://portal.azure.com', 'https://ms.portal.azure.com' ]
 var loginEndpoint = environment().authentication.loginEndpoint
-var loginEndpointFixed = lastIndexOf(loginEndpoint, '/') == length(loginEndpoint) - 1 ? substring(loginEndpoint, 0, length(loginEndpoint) - 1) : loginEndpoint
+var loginEndpointFixed = length(loginEndpoint) > 0 && lastIndexOf(loginEndpoint, '/') == length(loginEndpoint) - 1 ? substring(loginEndpoint, 0, length(loginEndpoint) - 1) : loginEndpoint
 var allMsftAllowedOrigins = !(empty(clientAppId)) ? union(msftAllowedOrigins, [ loginEndpointFixed ]) : msftAllowedOrigins
 // Combine custom origins with Microsoft origins, remove any empty origin strings and remove any duplicate origins
 var allowedOrigins = reduce(filter(union(split(allowedOrigin, ';'), allMsftAllowedOrigins), o => length(trim(o)) > 0), [], (cur, next) => union(cur, [next]))
