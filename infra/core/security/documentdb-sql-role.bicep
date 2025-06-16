@@ -14,8 +14,18 @@ resource databaseAccount 'Microsoft.DocumentDB/databaseAccounts@2023-04-15' exis
   name: databaseAccountName
 }
 
-resource sqlRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-04-15' = {
-  name: guid(databaseAccount.id, principalId, roleDefinitionId)
+// Create a deterministic name for the role assignment
+var roleAssignmentName = guid(databaseAccount.id, principalId, roleDefinitionId)
+
+// Check if role assignment exists
+resource existingSqlRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-04-15' existing = if (contains(resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments', databaseAccountName, roleAssignmentName), 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')) {
+  name: roleAssignmentName
+  parent: databaseAccount
+}
+
+// Only create if it doesn't exist
+resource sqlRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2023-04-15' = if (!contains(resourceId('Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments', databaseAccountName, roleAssignmentName), 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments')) {
+  name: roleAssignmentName
   parent: databaseAccount
   properties: {
     principalId: principalId

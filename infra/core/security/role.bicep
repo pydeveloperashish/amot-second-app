@@ -11,12 +11,17 @@ param principalId string
 param principalType string = 'ServicePrincipal'
 param roleDefinitionId string
 
-// Add a deployment-specific identifier and scope
-var deploymentIdentifier = deployment().name
-var scopeIdentifier = resourceGroup().id
+// Create a deterministic name for the role assignment
+var roleAssignmentName = guid(subscription().id, resourceGroup().id, principalId, roleDefinitionId)
 
-resource role 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(subscription().id, scopeIdentifier, principalId, roleDefinitionId, deploymentIdentifier, uniqueString(deployment().name))
+// Check if role assignment exists
+resource existingRole 'Microsoft.Authorization/roleAssignments@2022-04-01' existing = if (contains(resourceId('Microsoft.Authorization/roleAssignments', roleAssignmentName), 'Microsoft.Authorization/roleAssignments')) {
+  name: roleAssignmentName
+}
+
+// Only create if it doesn't exist
+resource role 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!contains(resourceId('Microsoft.Authorization/roleAssignments', roleAssignmentName), 'Microsoft.Authorization/roleAssignments')) {
+  name: roleAssignmentName
   properties: {
     principalId: principalId
     principalType: principalType
