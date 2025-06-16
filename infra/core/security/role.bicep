@@ -11,8 +11,11 @@ param principalId string
 param principalType string = 'ServicePrincipal'
 param roleDefinitionId string
 
+// Add a deployment-specific identifier
+var deploymentIdentifier = deployment().name
+
 resource role 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(subscription().id, resourceGroup().id, principalId, roleDefinitionId)
+  name: guid(subscription().id, resourceGroup().id, principalId, roleDefinitionId, deploymentIdentifier)
   properties: {
     principalId: principalId
     principalType: principalType
