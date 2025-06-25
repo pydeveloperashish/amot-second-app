@@ -72,7 +72,7 @@ var monitorDnsZoneNames = [
   'privatelink.ods.opinsights.azure.com'
   'privatelink.agentsvc.azure.automation.net'
 ]
-module monitorDnsZones './core/networking/private-dns-zones.bicep' = [for monitorDnsZoneName in monitorDnsZoneNames: {
+module monitorDnsZones './core/networking/private-dns-zones.bicep' = [for monitorDnsZoneName in monitorDnsZoneNames: if (!empty(applicationInsightsId) && !empty(logAnalyticsWorkspaceId)) {
   name: '${split(monitorDnsZoneName, '.')[1]}-dnszone'
   params: {
     dnsZoneName: monitorDnsZoneName
@@ -81,11 +81,12 @@ module monitorDnsZones './core/networking/private-dns-zones.bicep' = [for monito
   }
 }]
 // Get blob DNS zone index for monitor private link
-var dnsZoneBlobIndex = filter(flatten(privateEndpointInfo), info => info.groupId == 'blob')[0].dnsZoneIndex
+var blobEndpointExists = length(filter(flatten(privateEndpointInfo), info => info.groupId == 'blob')) > 0
+var dnsZoneBlobIndex = blobEndpointExists ? filter(flatten(privateEndpointInfo), info => info.groupId == 'blob')[0].dnsZoneIndex : 0
 
 // Azure Monitor Private Link Scope
 // https://learn.microsoft.com/azure/azure-monitor/logs/private-link-security
-resource monitorPrivateLinkScope 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = {
+resource monitorPrivateLinkScope 'microsoft.insights/privateLinkScopes@2021-07-01-preview' = if (!empty(applicationInsightsId) && !empty(logAnalyticsWorkspaceId)) {
   name: 'mpls${resourceToken}'
   location: 'global'
   tags: tags
@@ -98,14 +99,14 @@ resource monitorPrivateLinkScope 'microsoft.insights/privateLinkScopes@2021-07-0
     }
   }
 
-  resource logAnalyticsScopedResource 'scopedResources@2021-07-01-preview' = {
+  resource logAnalyticsScopedResource 'scopedResources@2021-07-01-preview' = if (!empty(logAnalyticsWorkspaceId)) {
     name: 'log-analytics-workspace-scoped-resource'
     properties: {
       linkedResourceId: logAnalyticsWorkspaceId
     }
   }
 
-  resource applicationInsightsScopedResource 'scopedResources@2021-07-01-preview' = {
+  resource applicationInsightsScopedResource 'scopedResources@2021-07-01-preview' = if (!empty(applicationInsightsId)) {
     name: 'application-insights-scoped-resource'
     properties: {
       linkedResourceId: applicationInsightsId
@@ -114,7 +115,7 @@ resource monitorPrivateLinkScope 'microsoft.insights/privateLinkScopes@2021-07-0
 }
 
 // Private endpoint
-module monitorPrivateEndpoint './core/networking/private-endpoint.bicep' = {
+module monitorPrivateEndpoint './core/networking/private-endpoint.bicep' = if (!empty(applicationInsightsId) && !empty(logAnalyticsWorkspaceId) && blobEndpointExists) {
   name: 'monitor-privatendpoint'
   params: {
     name: 'monitor${abbrs.privateEndpoint}${resourceToken}'
@@ -124,38 +125,42 @@ module monitorPrivateEndpoint './core/networking/private-endpoint.bicep' = {
     serviceId: monitorPrivateLinkScope.id
     groupIds: [ 'azuremonitor' ]
     // Add multiple DNS zone configs for Azure Monitor
-    privateDnsZoneConfigs: [
-      {
-        name: monitorDnsZones[0].name
-        properties: {
-          privateDnsZoneId: monitorDnsZones[0].outputs.id
+    privateDnsZoneConfigs: concat(
+      [
+        {
+          name: monitorDnsZones[0].name
+          properties: {
+            privateDnsZoneId: monitorDnsZones[0].outputs.id
+          }
         }
-      }
-      {
-        name: monitorDnsZones[1].name
-        properties: {
-          privateDnsZoneId: monitorDnsZones[1].outputs.id
+        {
+          name: monitorDnsZones[1].name
+          properties: {
+            privateDnsZoneId: monitorDnsZones[1].outputs.id
+          }
         }
-      }
-      {
-        name: monitorDnsZones[2].name
-        properties: {
-          privateDnsZoneId: monitorDnsZones[2].outputs.id
+        {
+          name: monitorDnsZones[2].name
+          properties: {
+            privateDnsZoneId: monitorDnsZones[2].outputs.id
+          }
         }
-      }
-      {
-        name: monitorDnsZones[3].name
-        properties: {
-          privateDnsZoneId: monitorDnsZones[3].outputs.id
+        {
+          name: monitorDnsZones[3].name
+          properties: {
+            privateDnsZoneId: monitorDnsZones[3].outputs.id
+          }
         }
-      }
-      {
-        name: dnsZones[dnsZoneBlobIndex].name
-        properties: {
-          privateDnsZoneId: dnsZones[dnsZoneBlobIndex].outputs.id
+      ],
+      blobEndpointExists ? [
+        {
+          name: dnsZones[dnsZoneBlobIndex].name
+          properties: {
+            privateDnsZoneId: dnsZones[dnsZoneBlobIndex].outputs.id
+          }
         }
-      }
-    ]
+      ] : []
+    )
   }
   dependsOn: [ monitorDnsZones, dnsZones ]
 }
