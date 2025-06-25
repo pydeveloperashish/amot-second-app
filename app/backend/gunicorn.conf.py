@@ -4,7 +4,7 @@ import os
 max_requests = 1000
 max_requests_jitter = 50
 log_file = "-"
-bind = "0.0.0.0"
+bind = f"0.0.0.0:{os.getenv('PORT', '8000')}"
 
 timeout = 230
 # https://learn.microsoft.com/troubleshoot/azure/app-service/web-apps-performance-faqs#why-does-my-request-time-out-after-230-seconds
