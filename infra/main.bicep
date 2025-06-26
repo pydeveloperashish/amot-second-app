@@ -485,7 +485,7 @@ module backend 'core/host/appservice.bicep' = if (deploymentTarget == 'appservic
     appServicePlanId: deploymentTarget == 'appservice' ? appServicePlan.outputs.id : ''
     runtimeName: 'python'
     runtimeVersion: '3.11'
-    appCommandLine: 'python3 -m gunicorn main:app'
+    appCommandLine: 'cd app/backend && python3 -m gunicorn main:app'
     scmDoBuildDuringDeployment: true
     managedIdentity: true
     virtualNetworkSubnetId: isolation.outputs.appSubnetId
