@@ -581,13 +581,22 @@ async def setup_clients():
     current_app.config[CONFIG_CREDENTIAL] = azure_credential
 
     # Set up clients for AI Search and Storage
+    # Try to use API key first as fallback for authentication issues
+    search_credential = azure_credential
+    if AZURE_SEARCH_KEY := os.getenv("AZURE_SEARCH_KEY"):
+        current_app.logger.info("Using Azure Search API key for authentication")
+        from azure.core.credentials import AzureKeyCredential
+        search_credential = AzureKeyCredential(AZURE_SEARCH_KEY)
+    else:
+        current_app.logger.info("Using Azure credential for Azure Search authentication")
+    
     search_client = SearchClient(
         endpoint=AZURE_SEARCH_ENDPOINT,
         index_name=AZURE_SEARCH_INDEX,
-        credential=azure_credential,
+        credential=search_credential,
     )
     agent_client = KnowledgeAgentRetrievalClient(
-        endpoint=AZURE_SEARCH_ENDPOINT, agent_name=AZURE_SEARCH_AGENT, credential=azure_credential
+        endpoint=AZURE_SEARCH_ENDPOINT, agent_name=AZURE_SEARCH_AGENT, credential=search_credential
     )
 
     blob_container_client = ContainerClient(
@@ -600,7 +609,7 @@ async def setup_clients():
         current_app.logger.info("AZURE_USE_AUTHENTICATION is true, setting up search index client")
         search_index_client = SearchIndexClient(
             endpoint=AZURE_SEARCH_ENDPOINT,
-            credential=azure_credential,
+            credential=search_credential,
         )
         search_index = await search_index_client.get_index(AZURE_SEARCH_INDEX)
         await search_index_client.close()
