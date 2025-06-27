@@ -866,24 +866,36 @@ async def setup_clients():
 
 @bp.after_app_serving
 async def close_clients():
-    # Close all clients in a try-except block to ensure all are attempted
-    for client_key, client_name in [
+    """Close all clients in a try-except block to ensure all are attempted"""
+    clients_to_close = [
         (CONFIG_OPENAI_CLIENT, "OpenAI client"),
         (CONFIG_SEARCH_CLIENT, "Search client"),
         (CONFIG_BLOB_CONTAINER_CLIENT, "Blob container client"),
         (CONFIG_USER_BLOB_CONTAINER_CLIENT, "User blob container client"),
         (CONFIG_AGENT_CLIENT, "Agent client")
-    ]:
+    ]
+    
+    for client_key, client_name in clients_to_close:
         try:
-            if client_key in current_app.config and hasattr(current_app.config[client_key], 'close'):
-                await current_app.config[client_key].close()
+            if client_key in current_app.config:
+                client = current_app.config[client_key]
+                # Check if client has close method
+                if hasattr(client, 'close'):
+                    current_app.logger.info(f"Closing {client_name}")
+                    await client.close()
+                # Check if client has aiohttp session that needs closing
+                elif hasattr(client, '_session') and hasattr(client._session, 'close'):
+                    current_app.logger.info(f"Closing {client_name} session")
+                    await client._session.close()
         except Exception as e:
             current_app.logger.warning(f"Error closing {client_name}: {str(e)}")
 
 async def cleanup():
     """Cleanup method called by the worker during shutdown"""
     try:
+        current_app.logger.info("Starting application cleanup")
         await close_clients()
+        current_app.logger.info("Application cleanup completed")
     except Exception as e:
         current_app.logger.warning(f"Error during app cleanup: {str(e)}")
 

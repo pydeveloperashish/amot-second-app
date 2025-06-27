@@ -1,6 +1,7 @@
 from uvicorn.workers import UvicornWorker
 import asyncio
 from typing import Optional
+import signal
 
 logconfig_dict = {
     "version": 1,
@@ -46,32 +47,47 @@ logconfig_dict = {
 class CustomUvicornWorker(UvicornWorker):
     CONFIG_KWARGS = {
         "log_config": logconfig_dict,
+        "timeout_keep_alive": 30,  # Reduce keep-alive timeout
+        "timeout_graceful_shutdown": 10,  # Add graceful shutdown timeout
     }
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._shutdown_complete = asyncio.Event()
         self._cleanup_task: Optional[asyncio.Task] = None
+        self._original_handler = None
 
     async def _serve(self) -> None:
         self._cleanup_task = None
         try:
+            # Set up signal handlers
+            self._original_handler = signal.getsignal(signal.SIGTERM)
+            signal.signal(signal.SIGTERM, lambda sig, frame: self._handle_signal(sig, frame))
+            
             await super()._serve()
         finally:
-            if self._cleanup_task:
-                try:
-                    await self._cleanup_task
-                except Exception as e:
-                    self.log.warning(f"Error during final cleanup: {str(e)}")
+            # Wait for cleanup to complete
+            try:
+                if self._cleanup_task:
+                    await asyncio.wait_for(self._cleanup_task, timeout=10.0)
+            except asyncio.TimeoutError:
+                self.log.warning("Cleanup task timed out")
+            except Exception as e:
+                self.log.warning(f"Error during cleanup: {str(e)}")
+            finally:
+                # Restore original signal handler
+                if self._original_handler:
+                    signal.signal(signal.SIGTERM, self._original_handler)
 
-    def handle_exit(self, sig: int, frame) -> None:
-        """Handle process termination gracefully"""
-        self.log.info("Received signal %s. Starting graceful shutdown", sig)
+    def _handle_signal(self, sig: int, frame) -> None:
+        """Handle termination signal"""
+        self.log.info(f"Received signal {sig}. Starting graceful shutdown")
         
-        # Create cleanup task if not already running
         if not self._cleanup_task:
             loop = asyncio.get_event_loop()
             self._cleanup_task = loop.create_task(self._cleanup())
-            
+        
+        # Call parent's signal handler
         super().handle_exit(sig, frame)
 
     async def _cleanup(self) -> None:
@@ -79,6 +95,9 @@ class CustomUvicornWorker(UvicornWorker):
         try:
             # Get the app instance
             app = self.app.load()
+            
+            # Set shutdown event
+            self._shutdown_complete.set()
             
             # If the app has a cleanup method, call it
             if hasattr(app, 'cleanup') and callable(app.cleanup):
@@ -88,3 +107,6 @@ class CustomUvicornWorker(UvicornWorker):
             await asyncio.sleep(0.1)
         except Exception as e:
             self.log.warning(f"Error during connection cleanup: {str(e)}")
+        finally:
+            # Ensure we always clear the shutdown event
+            self._shutdown_complete.clear()
