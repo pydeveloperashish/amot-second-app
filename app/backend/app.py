@@ -867,44 +867,33 @@ async def setup_clients():
 @bp.after_app_serving
 async def close_clients():
     # Close all clients in a try-except block to ensure all are attempted
-    try:
-        if CONFIG_OPENAI_CLIENT in current_app.config:
-            await current_app.config[CONFIG_OPENAI_CLIENT].close()
-    except Exception as e:
-        current_app.logger.warning(f"Error closing OpenAI client: {str(e)}")
-        
-    try:
-        if CONFIG_SEARCH_CLIENT in current_app.config:
-            await current_app.config[CONFIG_SEARCH_CLIENT].close()
-    except Exception as e:
-        current_app.logger.warning(f"Error closing Search client: {str(e)}")
-        
-    try:
-        if CONFIG_BLOB_CONTAINER_CLIENT in current_app.config:
-            await current_app.config[CONFIG_BLOB_CONTAINER_CLIENT].close()
-    except Exception as e:
-        current_app.logger.warning(f"Error closing Blob container client: {str(e)}")
-        
-    try:
-        if CONFIG_USER_BLOB_CONTAINER_CLIENT in current_app.config:
-            await current_app.config[CONFIG_USER_BLOB_CONTAINER_CLIENT].close()
-    except Exception as e:
-        current_app.logger.warning(f"Error closing User blob container client: {str(e)}")
-        
-    try:
-        if CONFIG_AGENT_CLIENT in current_app.config:
-            await current_app.config[CONFIG_AGENT_CLIENT].close()
-    except Exception as e:
-        current_app.logger.warning(f"Error closing Agent client: {str(e)}")
+    for client_key, client_name in [
+        (CONFIG_OPENAI_CLIENT, "OpenAI client"),
+        (CONFIG_SEARCH_CLIENT, "Search client"),
+        (CONFIG_BLOB_CONTAINER_CLIENT, "Blob container client"),
+        (CONFIG_USER_BLOB_CONTAINER_CLIENT, "User blob container client"),
+        (CONFIG_AGENT_CLIENT, "Agent client")
+    ]:
+        try:
+            if client_key in current_app.config and hasattr(current_app.config[client_key], 'close'):
+                await current_app.config[client_key].close()
+        except Exception as e:
+            current_app.logger.warning(f"Error closing {client_name}: {str(e)}")
 
-    # Force close any remaining aiohttp connections
-    await aiohttp.ClientSession.close_all()
-
+async def cleanup():
+    """Cleanup method called by the worker during shutdown"""
+    try:
+        await close_clients()
+    except Exception as e:
+        current_app.logger.warning(f"Error during app cleanup: {str(e)}")
 
 def create_app():
     app = Quart(__name__)
     app.register_blueprint(bp)
     app.register_blueprint(chat_history_cosmosdb_bp)
+    
+    # Add cleanup method to the app
+    app.cleanup = cleanup
 
     if os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING"):
         app.logger.info("APPLICATIONINSIGHTS_CONNECTION_STRING is set, enabling Azure Monitor")
