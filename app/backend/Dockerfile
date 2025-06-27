@@ -1,7 +1,7 @@
 FROM python:3.11-bullseye
 
 # Set the working directory
-WORKDIR /app
+WORKDIR /app/backend
 
 # First copy requirements to leverage Docker cache
 COPY requirements.txt .
@@ -12,7 +12,7 @@ RUN python -m pip install gunicorn
 COPY . .
 
 # Set environment variable for Python path
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/backend
 
-# Start gunicorn from the directory where main.py and app.py are located
+# Start gunicorn
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "main:app"]
