@@ -50,6 +50,7 @@ from quart import (
     send_from_directory,
 )
 from quart_cors import cors
+import aiohttp
 
 from approaches.approach import Approach
 from approaches.chatreadretrieveread import ChatReadRetrieveReadApproach
@@ -865,10 +866,39 @@ async def setup_clients():
 
 @bp.after_app_serving
 async def close_clients():
-    await current_app.config[CONFIG_SEARCH_CLIENT].close()
-    await current_app.config[CONFIG_BLOB_CONTAINER_CLIENT].close()
-    if current_app.config.get(CONFIG_USER_BLOB_CONTAINER_CLIENT):
-        await current_app.config[CONFIG_USER_BLOB_CONTAINER_CLIENT].close()
+    # Close all clients in a try-except block to ensure all are attempted
+    try:
+        if CONFIG_OPENAI_CLIENT in current_app.config:
+            await current_app.config[CONFIG_OPENAI_CLIENT].close()
+    except Exception as e:
+        current_app.logger.warning(f"Error closing OpenAI client: {str(e)}")
+        
+    try:
+        if CONFIG_SEARCH_CLIENT in current_app.config:
+            await current_app.config[CONFIG_SEARCH_CLIENT].close()
+    except Exception as e:
+        current_app.logger.warning(f"Error closing Search client: {str(e)}")
+        
+    try:
+        if CONFIG_BLOB_CONTAINER_CLIENT in current_app.config:
+            await current_app.config[CONFIG_BLOB_CONTAINER_CLIENT].close()
+    except Exception as e:
+        current_app.logger.warning(f"Error closing Blob container client: {str(e)}")
+        
+    try:
+        if CONFIG_USER_BLOB_CONTAINER_CLIENT in current_app.config:
+            await current_app.config[CONFIG_USER_BLOB_CONTAINER_CLIENT].close()
+    except Exception as e:
+        current_app.logger.warning(f"Error closing User blob container client: {str(e)}")
+        
+    try:
+        if CONFIG_AGENT_CLIENT in current_app.config:
+            await current_app.config[CONFIG_AGENT_CLIENT].close()
+    except Exception as e:
+        current_app.logger.warning(f"Error closing Agent client: {str(e)}")
+
+    # Force close any remaining aiohttp connections
+    await aiohttp.ClientSession.close_all()
 
 
 def create_app():
