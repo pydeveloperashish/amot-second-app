@@ -56,6 +56,7 @@ class CustomUvicornWorker(UvicornWorker):
         self._shutdown_complete = asyncio.Event()
         self._cleanup_task: Optional[asyncio.Task] = None
         self._original_handler = None
+        self._is_shutting_down = False
 
     async def _serve(self) -> None:
         self._cleanup_task = None
@@ -69,7 +70,7 @@ class CustomUvicornWorker(UvicornWorker):
             # Wait for cleanup to complete
             try:
                 if self._cleanup_task:
-                    await asyncio.wait_for(self._cleanup_task, timeout=10.0)
+                    await asyncio.wait_for(self._cleanup_task, timeout=20.0)  # Increased timeout
             except asyncio.TimeoutError:
                 self.log.warning("Cleanup task timed out")
             except Exception as e:
@@ -81,6 +82,11 @@ class CustomUvicornWorker(UvicornWorker):
 
     def _handle_signal(self, sig: int, frame) -> None:
         """Handle termination signal"""
+        if self._is_shutting_down:
+            self.log.warning("Already shutting down, ignoring signal")
+            return
+            
+        self._is_shutting_down = True
         self.log.info(f"Received signal {sig}. Starting graceful shutdown")
         
         if not self._cleanup_task:
@@ -101,12 +107,29 @@ class CustomUvicornWorker(UvicornWorker):
             
             # If the app has a cleanup method, call it
             if hasattr(app, 'cleanup') and callable(app.cleanup):
-                await app.cleanup()
-                
+                try:
+                    await asyncio.wait_for(app.cleanup(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    self.log.warning("App cleanup timed out")
+                except Exception as e:
+                    self.log.warning(f"Error during app cleanup: {str(e)}")
+            
+            # Close any remaining connections
+            for task in asyncio.all_tasks():
+                if task is not asyncio.current_task():
+                    task.cancel()
+                    try:
+                        await asyncio.wait_for(task, timeout=5.0)
+                    except (asyncio.TimeoutError, asyncio.CancelledError):
+                        pass
+                    except Exception as e:
+                        self.log.warning(f"Error cancelling task: {str(e)}")
+            
             # Small delay to allow connections to close gracefully
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.5)
         except Exception as e:
             self.log.warning(f"Error during connection cleanup: {str(e)}")
         finally:
-            # Ensure we always clear the shutdown event
+            # Ensure we always clear the shutdown event and flag
             self._shutdown_complete.clear()
+            self._is_shutting_down = False

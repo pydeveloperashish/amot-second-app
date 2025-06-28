@@ -9,6 +9,7 @@ worker_tmp_dir = "/dev/shm"  # Use RAM-based directory for worker temp files
 preload_app = True  # Preload application code before worker processes are forked
 
 timeout = 230
+graceful_timeout = 30  # Time to wait for worker to finish handling requests before force killing
 # https://learn.microsoft.com/troubleshoot/azure/app-service/web-apps-performance-faqs#why-does-my-request-time-out-after-230-seconds
 
 num_cpus = multiprocessing.cpu_count()
@@ -18,3 +19,4 @@ if os.getenv("WEBSITE_SKU") == "LinuxFree":
 else:
     workers = (num_cpus * 2) + 1
 worker_class = "custom_uvicorn_worker.CustomUvicornWorker"
+keepalive = 5  # How long to wait for requests before closing connection
