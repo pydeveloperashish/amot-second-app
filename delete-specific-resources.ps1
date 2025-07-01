@@ -16,7 +16,7 @@ function Remove-AzureResource {
         [string]$displayName
     )
     if (![string]::IsNullOrEmpty($resourceName) -and ![string]::IsNullOrEmpty($resourceGroup)) {
-        Write-Host "Deleting $displayName: $resourceName from resource group: $resourceGroup"
+        Write-Host ("Deleting {0}: {1} from resource group: {2}" -f $displayName, $resourceName, $resourceGroup)
         az resource delete --name $resourceName --resource-group $resourceGroup --resource-type $resourceType --verbose
     }
 }
@@ -89,7 +89,7 @@ $resources = @(
 Write-Host "`nThe following resources will be deleted:`n"
 foreach ($resource in $resources) {
     if (![string]::IsNullOrEmpty($resource.name)) {
-        Write-Host "$($resource.display): $($resource.name) in resource group: $($resource.group)"
+        Write-Host ("${0}: {1} in resource group: {2}" -f $resource.display, $resource.name, $resource.group)
     }
 }
 
